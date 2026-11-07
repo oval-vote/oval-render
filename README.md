@@ -28,8 +28,18 @@ Markdown bodies are rendered with the specification's Markdown profile: CommonMa
 with raw HTML escaped, images shown as their text, and code shown as plain text. Every string from
 the guide is escaped, so a guide cannot inject markup into the page.
 
+The default stylesheet is the Oval design system from
+[`@oval-vote/brand`](https://www.npmjs.com/package/@oval-vote/brand): its tokens (paper, ink,
+the purple mark, support green and oppose red, in light and dark forms), its components (ballot
+rows with their bubbles, badges, callouts, labels), and then the rules for the guide's own
+elements. A supported campaign is shown with a filled ballot oval, every other campaign with an
+empty one. The full document links Newsreader, Public Sans, and IBM Plex Mono from Google Fonts;
+pass `fonts: "none"` to keep the output free of third-party requests, and the fallback stacks
+apply. Fragments never link fonts.
+
 The markup is semantic and every element carries an `oval-` class, so a stylesheet of your own can
-replace the default one; pass `stylesheet: "none"` to leave it out.
+replace the default one; pass `stylesheet: "none"` to leave it out. `TOKENS` and `COMPONENTS`
+export the brand stylesheets alone for a host page that styles fragments itself.
 
 ## Developing
 
@@ -44,6 +54,7 @@ npm run types    # regenerates src/model.ts from schema/guide.schema.json
 ```
 
 `schema/guide.schema.json` is a copy of the specification's schema, and `src/model.ts` is generated
-from it; CI fails when the two disagree. `tests/fixtures/franklin.oval.json` is the specification's
+from it; CI fails when the two disagree. The brand stylesheets are read from the installed
+`@oval-vote/brand` package, so updating the design system is a version bump. `tests/fixtures/franklin.oval.json` is the specification's
 compiled example. `npm run preview -- path/to/guide.oval` previews a guide of your own; without an
 argument it previews the Franklin example.

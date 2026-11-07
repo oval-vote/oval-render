@@ -7,8 +7,11 @@ import {
   render,
   renderFragment,
   renderSource,
+  COMPONENTS,
+  THEME,
+  TOKENS,
 } from "../src/index.ts";
-import type { CompiledGuide } from "../src/index.ts";
+import type { BallotItem, Campaign, CompiledGuide } from "../src/index.ts";
 
 const guide: CompiledGuide = JSON.parse(
   readFileSync(new URL("./fixtures/franklin.oval.json", import.meta.url), "utf8"),
@@ -25,6 +28,21 @@ test("the document is complete HTML with the guide's name as its title", () => {
   assert.ok(html.includes("<style>"));
   assert.ok(html.endsWith("</html>\n"));
   assert.ok(!render(guide, { stylesheet: "none" }).includes("<style>"));
+});
+
+test("the document links the brand fonts unless asked not to", () => {
+  assert.ok(render(guide).includes("fonts.googleapis.com/css2?family=Newsreader"));
+  assert.ok(!render(guide, { fonts: "none" }).includes("fonts.googleapis.com"));
+  assert.ok(!render(guide, { stylesheet: "none" }).includes("fonts.googleapis.com"));
+  assert.ok(!renderFragment(guide).includes("fonts.googleapis.com"));
+});
+
+test("the stylesheet is the brand package's tokens and components, then the guide's rules", () => {
+  assert.ok(THEME.startsWith(TOKENS.trim()));
+  assert.ok(TOKENS.includes("--oval-paper:"));
+  assert.ok(COMPONENTS.includes(".oval-ballot-row"));
+  assert.ok(THEME.includes(COMPONENTS.trim()));
+  assert.ok(THEME.includes(".oval-guide"));
 });
 
 test("every ballot, contest, and measure is rendered once with an anchor", () => {
@@ -46,7 +64,29 @@ test("campaigns carry their stance, party, and flags", () => {
   assert.ok(html.includes('Hana Nakamura <span class="oval-muted">(President)</span>'));
   assert.ok(html.includes('class="oval-badge" title="Democratic">D</span>'));
   assert.ok(html.includes('<span class="oval-badge">Incumbent</span>'));
-  assert.ok(html.includes('<span class="oval-mark oval-mark-support">Recommended</span>'));
+  assert.ok(html.includes('<span class="oval-stance oval-stance-support">Recommended</span>'));
+});
+
+test("a supported campaign's oval is filled in and every other oval is empty", () => {
+  const html = renderFragment(guide);
+  const campaigns = (items: BallotItem[]): Campaign[] =>
+    items.flatMap((item) => {
+      switch (item.kind) {
+        case "ballot":
+        case "section":
+          return campaigns(item.items);
+        case "contest":
+          return item.campaigns;
+        case "measure":
+          return [];
+      }
+    });
+  const all = guide.ballots.flatMap((ballot) => campaigns(ballot.items));
+  const supported = all.filter((campaign) => campaign.stance.position === "support").length;
+  assert.ok(supported > 0);
+  assert.equal(all.length, guide.counts.campaigns);
+  assert.equal(count(html, 'class="oval-bubble oval-bubble-filled"'), supported);
+  assert.equal(count(html, 'class="oval-bubble"'), guide.counts.campaigns - supported);
 });
 
 test("markdown bodies become HTML with the profile's constructs and nothing else", () => {

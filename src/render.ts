@@ -13,11 +13,12 @@ import type {
 import { compileSource } from "./compile.ts";
 import { attribute, element, escape, joinLines } from "./html.ts";
 import { markdown } from "./markdown.ts";
-import { THEME } from "./theme.ts";
+import { FONT_STYLESHEET, THEME } from "./theme.ts";
 
 export interface RenderOptions {
   language?: string;
   stylesheet?: "inline" | "none";
+  fonts?: "google" | "none";
   contents?: boolean;
 }
 
@@ -38,13 +39,18 @@ export function renderSourceFragment(source: string, options: RenderOptions = {}
 export function render(guide: CompiledGuide, options: RenderOptions = {}): string {
   const language = options.language ?? "en";
   const stylesheet = options.stylesheet ?? "inline";
+  const fonts = stylesheet === "inline" && (options.fonts ?? "google") === "google";
   return joinLines([
     "<!doctype html>",
     `<html lang="${escape(language)}">`,
     "<head>",
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<meta name="color-scheme" content="light dark">',
     `<title>${escape(guide.guide.name)}</title>`,
+    fonts && '<link rel="preconnect" href="https://fonts.googleapis.com">',
+    fonts && '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>',
+    fonts && `<link rel="stylesheet" href="${FONT_STYLESHEET}">`,
     stylesheet === "inline" && `<style>${THEME}</style>`,
     "</head>",
     "<body>",
@@ -77,7 +83,7 @@ function renderContents(guide: CompiledGuide): string {
     (ballot) =>
       `<li><a href="#${escape(anchor("ballot", ballot.id))}">${escape(ballot.title)}</a>${contentsOf(ballot)}</li>`,
   );
-  return element("nav", ' class="oval-contents" aria-label="Contents"', [
+  return element("nav", ' class="oval-contents oval-card" aria-label="Contents"', [
     `<ul>${items.join("")}</ul>`,
   ]);
 }
@@ -152,10 +158,10 @@ function renderContest(contest: Contest, level: number, context: Context): strin
       ? ""
       : `<p class="oval-muted">${escape(describeMethod(contest.method))}</p>`,
     contest.note === undefined ? "" : markdown(contest.note),
-    `<ul class="oval-campaigns">${contest.campaigns.map((campaign) => renderCampaign(campaign, context)).join("")}</ul>`,
-    element("div", ' class="oval-recommendation"', [
+    `<ul class="oval-campaigns oval-ballot">${contest.campaigns.map((campaign) => renderCampaign(campaign, context)).join("")}</ul>`,
+    element("div", ' class="oval-recommendation oval-callout"', [
       recommendation.no_position
-        ? '<p class="oval-position">No position</p>'
+        ? '<p class="oval-position oval-label oval-muted">No position</p>'
         : renderStances(contest, context),
       recommendation.justification === undefined ? "" : markdown(recommendation.justification),
       recommendation.note === undefined ? "" : markdown(recommendation.note),
@@ -180,7 +186,11 @@ export function describeMethod(method: Method): string {
 }
 
 function renderCampaign(campaign: Campaign, context: Context): string {
-  const classes = ["oval-campaign", campaign.withdrawn && "oval-withdrawn"].filter(Boolean);
+  const classes = [
+    "oval-campaign",
+    "oval-ballot-row",
+    campaign.withdrawn && "oval-withdrawn",
+  ].filter(Boolean);
   const party = campaign.party === undefined ? undefined : context.parties.get(campaign.party);
   const members = campaign.members.map((member) => {
     const name = context.candidates.get(member.candidate) ?? member.candidate;
@@ -188,10 +198,11 @@ function renderCampaign(campaign: Campaign, context: Context): string {
       member.role === undefined ? "" : ` <span class="oval-muted">(${escape(member.role)})</span>`;
     return `${escape(name)}${role}`;
   });
+  const [bubble, stance] = renderStanceMark(campaign.stance);
   return element("li", ` class="${classes.join(" ")}"`, [
-    renderStanceMark(campaign.stance),
+    bubble,
     element("div", "", [
-      `<span class="oval-label">${members.join(" / ")}</span>`,
+      `<span class="oval-candidate">${members.join(" / ")}</span>`,
       party === undefined
         ? ""
         : `<span class="oval-badge"${attribute("title", party.name)}>${escape(party.abbreviation ?? party.name)}</span>`,
@@ -200,17 +211,23 @@ function renderCampaign(campaign: Campaign, context: Context): string {
       campaign.website === undefined ? "" : ` <a href="${escape(campaign.website)}">Website</a>`,
       campaign.note === undefined ? "" : markdown(campaign.note),
     ]),
+    stance,
   ]);
 }
 
-function renderStanceMark(stance: Stance): string {
+function renderStanceMark(stance: Stance): [string, string] {
+  const bubble = (filled: boolean) =>
+    `<span class="oval-bubble${filled ? " oval-bubble-filled" : ""}" aria-hidden="true"></span>`;
   switch (stance.position) {
     case "support":
-      return `<span class="oval-mark oval-mark-support">${stance.tier === 0 ? "Recommended" : `Choice ${stance.tier + 1}`}</span>`;
+      return [
+        bubble(true),
+        `<span class="oval-stance oval-stance-support">${stance.tier === 0 ? "Recommended" : `Choice ${stance.tier + 1}`}</span>`,
+      ];
     case "oppose":
-      return '<span class="oval-mark oval-mark-oppose">Oppose</span>';
+      return [bubble(false), '<span class="oval-stance oval-stance-oppose">Oppose</span>'];
     case "none":
-      return '<span class="oval-mark oval-mark-none"></span>';
+      return [bubble(false), '<span class="oval-stance"></span>'];
   }
 }
 
@@ -225,7 +242,7 @@ function renderStances(contest: Contest, context: Context): string {
       contest.recommendation.support_campaigns.length > 1
         ? `${ordinal(position + 1)} choice: `
         : "";
-    return `<p class="oval-position oval-position-yes">${prefix}${names}</p>`;
+    return `<p class="oval-position oval-label oval-stance-support">${prefix}${names}</p>`;
   });
   const opposed = contest.recommendation.oppose_campaigns.map(label);
   void context;
@@ -233,7 +250,7 @@ function renderStances(contest: Contest, context: Context): string {
     ...tiers,
     opposed.length === 0
       ? ""
-      : `<p class="oval-position oval-position-no">Oppose: ${opposed.join(", ")}</p>`,
+      : `<p class="oval-position oval-label oval-stance-oppose">Oppose: ${opposed.join(", ")}</p>`,
   ]);
 }
 
@@ -280,7 +297,7 @@ function renderMeasure(measure: Measure, level: number): string {
           present.map(([term, value]) => `<dt>${escape(term)}</dt><dd>${escape(value)}</dd>`),
         ),
     measure.note === undefined ? "" : markdown(measure.note),
-    element("div", ' class="oval-recommendation"', [
+    element("div", ' class="oval-recommendation oval-callout"', [
       renderPosition(recommendation.position),
       recommendation.justification === undefined ? "" : markdown(recommendation.justification),
       recommendation.note === undefined ? "" : markdown(recommendation.note),
@@ -291,11 +308,11 @@ function renderMeasure(measure: Measure, level: number): string {
 function renderPosition(position: "yes" | "no" | "no-position"): string {
   switch (position) {
     case "yes":
-      return '<p class="oval-position oval-position-yes">Vote yes</p>';
+      return '<p class="oval-position oval-label oval-stance-support">Vote yes</p>';
     case "no":
-      return '<p class="oval-position oval-position-no">Vote no</p>';
+      return '<p class="oval-position oval-label oval-stance-oppose">Vote no</p>';
     case "no-position":
-      return '<p class="oval-position">No position</p>';
+      return '<p class="oval-position oval-label oval-muted">No position</p>';
   }
 }
 
