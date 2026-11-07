@@ -1,0 +1,51 @@
+{
+  "name": "@oval-vote/render",
+  "version": "0.1.0",
+  "description": "Render compiled Oval voting guides to HTML",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "oval-render": "./dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "schema/"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "compile": "tsc -p .",
+    "preview": "node scripts/preview.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "types": "node scripts/types.mjs",
+    "types:check": "node scripts/types.mjs --check",
+    "check": "npm run format:check && npm run types:check && npm run compile",
+    "test": "npm run check && node --test tests/*.test.ts"
+  },
+  "repository": "github:oval-vote/oval-render",
+  "homepage": "https://oval.vote",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@oval-vote/oval": "0.1.2",
+    "marked": "18.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "json-schema-to-typescript": "16.0.0",
+    "prettier": "3.9.10",
+    "typescript": "7.0.2"
+  }
+}
